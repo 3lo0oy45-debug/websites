@@ -167,6 +167,7 @@ function getSidebar(prefix, knowledgeTitle) {
 function getNavbar(prefix, knowledge, translation) {
   return [
     { text: knowledge, link: `${prefix}knowledge/google_play_purchase.md` },
-    { text: translation, link: `${prefix}contribute_translation.md` }
+    { text: translation, link: `${prefix}contribute_translation.md` },
+    { text: '💬 دردشة', link: '/chat/' }
   ]
 }
