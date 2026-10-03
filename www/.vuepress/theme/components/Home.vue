@@ -39,6 +39,8 @@
           <div>
           <img class="icon" align="middle" v-if="app.icon" :src="$withBase(app.icon)"></img>
           <span class="title">{{ app.title }}</span>
+          <span class="category-badge" v-if="app.category">{{ app.category }}</span>
+          <span class="version-badge" v-if="app.version">v{{ app.version }}</span>
           </div>
           <span class="details" v-html="app.details"/>
         </div>
@@ -156,6 +158,26 @@ export default {
       border-bottom none
       padding-bottom 0
       color lighten($textColor, 10%)
+    .category-badge
+      display inline-block
+      font-size 0.7rem
+      font-weight 500
+      color #fff
+      background $accentColor
+      padding 0.1rem 0.5rem
+      border-radius 4px
+      vertical-align middle
+      margin-left 0.3rem
+    .version-badge
+      display inline-block
+      font-size 0.7rem
+      font-weight 500
+      color $textColor
+      background lighten($textColor, 90%)
+      padding 0.1rem 0.5rem
+      border-radius 4px
+      vertical-align middle
+      margin-left 0.3rem
     .details
       display inline-block      
       line-height 1.3

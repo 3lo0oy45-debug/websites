@@ -159,6 +159,9 @@ function getSidebar(prefix, knowledgeTitle) {
       children: [
         'google_play_purchase',
         'exit_on_start',
+        'how_to_use',
+        'troubleshooting',
+        'faq',
       ]
     }]
   return res

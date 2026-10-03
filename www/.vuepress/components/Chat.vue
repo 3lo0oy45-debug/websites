@@ -1,9 +1,10 @@
 <template>
   <div class="chat-container">
     <div class="chat-header">
-      <span class="chat-status-dot"></span>
+      <span class="chat-status-dot" :class="{ 'status-sending': sending, 'status-error': sendError }"></span>
       <span class="chat-header-text">{{ headerText }}</span>
     </div>
+
     <div class="chat-messages" ref="messagesContainer">
       <div
         v-for="msg in messages"
@@ -16,8 +17,26 @@
       <div v-if="typing" class="chat-typing">
         <span></span><span></span><span></span>
       </div>
+      <div v-if="sendError" class="chat-error-msg">
+        تعذر إرسال الرسالة. يمكنك مراسلتنا مباشرة على <a :href="'mailto:' + contactEmail">{{ contactEmail }}</a>
+      </div>
     </div>
-    <div class="chat-input-area">
+
+    <!-- Step 1: Collect visitor name and email -->
+    <div class="chat-form" v-if="!visitorInfo.name">
+      <input v-model="nameInput" type="text" class="chat-input" placeholder="الاسم" />
+      <input v-model="emailInput" type="email" class="chat-input" placeholder="البريد الإلكتروني" />
+      <button class="chat-send-btn" @click="startChat" :disabled="!nameInput.trim() || !emailInput.trim()">
+        ابدأ الدردشة
+      </button>
+    </div>
+
+    <!-- Step 2: Chat interface -->
+    <div class="chat-input-area" v-else>
+      <div class="chat-visitor-info">
+        <span>{{ visitorInfo.name }}</span>
+        <button class="chat-change-info" @click="resetVisitorInfo">تغيير</button>
+      </div>
       <input
         v-model="inputText"
         @keydown.enter="sendMessage"
@@ -26,8 +45,8 @@
         :placeholder="placeholderText"
         maxlength="500"
       />
-      <button class="chat-send-btn" @click="sendMessage" :disabled="!inputText.trim()">
-        {{ sendButtonText }}
+      <button class="chat-send-btn" @click="sendMessage" :disabled="!inputText.trim() || sending">
+        {{ sending ? '⏳' : sendButtonText }}
       </button>
     </div>
   </div>
@@ -35,17 +54,28 @@
 
 <script>
 export default {
+  props: {
+    contactEmail: {
+      type: String,
+      default: 'support@rikka.app'
+    }
+  },
   data() {
     return {
       inputText: '',
+      nameInput: '',
+      emailInput: '',
+      visitorInfo: { name: '', email: '' },
       messages: [],
       typing: false,
+      sending: false,
+      sendError: false,
       msgId: 0,
       headerText: 'تواصل معنا',
       placeholderText: 'اكتب رسالتك هنا...',
       sendButtonText: 'إرسال',
       welcomeText: 'مرحبًا! 👋 اكتب رسالتك وسأرد عليك في أقرب وقت.',
-      thankText: 'شكرًا لتواصلك معنا! تم استلام رسالتك وسنعاود الاتصال بك قريبًا. 🌟'
+      thankText: 'شكرًا لتواصلك معنا! تم إرسال رسالتك وسنعاود الاتصال بك قريبًا. 🌟'
     }
   },
   mounted() {
@@ -60,6 +90,14 @@ export default {
     }
     if (!this.messages.length) {
       this.addMessage('owner', this.welcomeText)
+    }
+    const savedInfo = localStorage.getItem('chatVisitorInfo')
+    if (savedInfo) {
+      try {
+        this.visitorInfo = JSON.parse(savedInfo)
+      } catch (e) {
+        // ignore
+      }
     }
   },
   methods: {
@@ -77,16 +115,54 @@ export default {
       this.saveMessages()
       this.$nextTick(this.scrollToBottom)
     },
-    sendMessage() {
+    startChat() {
+      const name = this.nameInput.trim()
+      const email = this.emailInput.trim()
+      if (!name || !email) return
+      this.visitorInfo = { name, email }
+      localStorage.setItem('chatVisitorInfo', JSON.stringify(this.visitorInfo))
+    },
+    resetVisitorInfo() {
+      this.visitorInfo = { name: '', email: '' }
+      this.nameInput = ''
+      this.emailInput = ''
+      localStorage.removeItem('chatVisitorInfo')
+    },
+    async sendMessage() {
       const text = this.inputText.trim()
       if (!text) return
       this.addMessage('visitor', text)
       this.inputText = ''
+      this.sending = true
+      this.sendError = false
       this.typing = true
-      setTimeout(() => {
+      try {
+        await this.submitToEmail(text)
         this.typing = false
+        this.sending = false
         this.addMessage('owner', this.thankText)
-      }, 1500)
+      } catch (e) {
+        this.typing = false
+        this.sending = false
+        this.sendError = true
+      }
+    },
+    async submitToEmail(message) {
+      const response = await fetch('https://formsubmit.co/ajax/' + this.contactEmail, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          name: this.visitorInfo.name,
+          email: this.visitorInfo.email,
+          message: message,
+          _subject: 'رسالة جديدة من صفحة الدردشة - ' + this.visitorInfo.name
+        })
+      })
+      if (!response.ok) throw new Error('Failed to send')
+      return response.json()
     },
     saveMessages() {
       localStorage.setItem('chatMessages', JSON.stringify(this.messages))
@@ -125,6 +201,10 @@ export default {
   border-radius 50%
   background #4caf50
   display inline-block
+  &.status-sending
+    background #ffc107
+  &.status-error
+    background #f44336
 
 .chat-header-text
   font-size 1.1rem
@@ -193,14 +273,52 @@ export default {
   30%
     opacity 1
 
-.chat-input-area
+.chat-error-msg
+  align-self center
+  font-size 0.85rem
+  color #f44336
+  text-align center
+  padding 0.5rem
+  a
+    color $accentColor
+    text-decoration underline
+
+.chat-form
   display flex
+  flex-wrap wrap
   padding 0.8rem
   border-top 1px solid #eaecef
   background #fff
+  gap 0.5rem
+
+.chat-input-area
+  display flex
+  flex-wrap wrap
+  padding 0.8rem
+  border-top 1px solid #eaecef
+  background #fff
+  gap 0.5rem
+
+.chat-visitor-info
+  width 100%
+  display flex
+  align-items center
+  justify-content space-between
+  font-size 0.8rem
+  color #666
+  margin-bottom 0.3rem
+
+.chat-change-info
+  background none
+  border none
+  color $accentColor
+  cursor pointer
+  font-size 0.8rem
+  text-decoration underline
 
 .chat-input
   flex 1
+  min-width 150px
   border 1px solid #eaecef
   border-radius 8px
   padding 0.6rem 0.8rem
@@ -215,7 +333,6 @@ export default {
   border none
   border-radius 8px
   padding 0.6rem 1.2rem
-  margin-left 0.5rem
   cursor pointer
   font-size 0.95rem
   transition background 0.2s
